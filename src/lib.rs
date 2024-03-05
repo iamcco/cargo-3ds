@@ -4,7 +4,7 @@ mod graph;
 use core::fmt;
 use std::ffi::OsStr;
 use std::io::{BufRead, BufReader};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::{Command, ExitStatus, Stdio};
 use std::{env, io, process};
 
@@ -275,24 +275,20 @@ pub fn get_metadata(messages: &[Message]) -> CTRConfig {
 
     let (package, artifact) = (package.unwrap(), artifact.unwrap());
 
-    let mut icon = String::from("./icon.png");
-
-    if !Path::new(&icon).exists() {
-        icon = format!(
+    let icon = get_project_icon(
+        &format!(
             "{}/libctru/default_icon.png",
             env::var("DEVKITPRO").unwrap()
-        );
-    }
+        ),
+        &package.manifest_path.clone().into(),
+    );
 
     // for now assume a single "kind" since we only support one output artifact
     let name = match artifact.target.kind[0].as_ref() {
-        "bin" | "lib" | "rlib" | "dylib" if artifact.target.test => {
-            format!("{} tests", artifact.target.name)
-        }
         "example" => {
             format!("{} - {} example", artifact.target.name, package.name)
         }
-        _ => artifact.target.name,
+        _ => get_project_name(&artifact.target.name, &package.manifest_path.clone().into()),
     };
 
     let author = match package.authors.as_slice() {
@@ -435,6 +431,48 @@ pub fn get_romfs_path(config: &CTRConfig) -> (PathBuf, bool) {
     romfs_path.push(romfs_dir_setting);
 
     (romfs_path, is_default)
+}
+
+pub fn get_project_name(name: &str, manifest_path: &PathBuf) -> String {
+    let manifest_str = std::fs::read_to_string(manifest_path)
+        .unwrap_or_else(|e| panic!("Could not open {}: {e}", manifest_path.display()));
+    let manifest_data: toml::Value =
+        toml::de::from_str(&manifest_str).expect("Could not parse Cargo manifest as TOML");
+
+    // Find the romfs setting and compute the path
+    manifest_data
+        .as_table()
+        .and_then(|table| table.get("package"))
+        .and_then(toml::Value::as_table)
+        .and_then(|table| table.get("metadata"))
+        .and_then(toml::Value::as_table)
+        .and_then(|table| table.get("cargo-3ds"))
+        .and_then(toml::Value::as_table)
+        .and_then(|table| table.get("name"))
+        .and_then(toml::Value::as_str)
+        .unwrap_or_else(|| name)
+        .to_string()
+}
+
+pub fn get_project_icon(icon: &str, manifest_path: &PathBuf) -> String {
+    let manifest_str = std::fs::read_to_string(manifest_path)
+        .unwrap_or_else(|e| panic!("Could not open {}: {e}", manifest_path.display()));
+    let manifest_data: toml::Value =
+        toml::de::from_str(&manifest_str).expect("Could not parse Cargo manifest as TOML");
+
+    // Find the romfs setting and compute the path
+    manifest_data
+        .as_table()
+        .and_then(|table| table.get("package"))
+        .and_then(toml::Value::as_table)
+        .and_then(|table| table.get("metadata"))
+        .and_then(toml::Value::as_table)
+        .and_then(|table| table.get("cargo-3ds"))
+        .and_then(toml::Value::as_table)
+        .and_then(|table| table.get("icon"))
+        .and_then(toml::Value::as_str)
+        .unwrap_or_else(|| icon)
+        .to_string()
 }
 
 #[derive(Default)]
