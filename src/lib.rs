@@ -280,7 +280,7 @@ pub fn get_metadata(messages: &[Message]) -> CTRConfig {
             "{}/libctru/default_icon.png",
             env::var("DEVKITPRO").unwrap()
         ),
-        &package.manifest_path.clone().into(),
+        package.manifest_path.clone().into(),
     );
 
     // for now assume a single "kind" since we only support one output artifact
@@ -303,7 +303,7 @@ pub fn get_metadata(messages: &[Message]) -> CTRConfig {
             .description
             .clone()
             .unwrap_or_else(|| String::from("Homebrew Application")),
-        icon,
+        icon: icon.display().to_string(),
         target_path: artifact.executable.unwrap().into(),
         cargo_manifest_path: package.manifest_path.into(),
     }
@@ -454,25 +454,30 @@ pub fn get_project_name(name: &str, manifest_path: &PathBuf) -> String {
         .to_string()
 }
 
-pub fn get_project_icon(icon: &str, manifest_path: &PathBuf) -> String {
-    let manifest_str = std::fs::read_to_string(manifest_path)
-        .unwrap_or_else(|e| panic!("Could not open {}: {e}", manifest_path.display()));
+pub fn get_project_icon(icon: &str, mut manifest_path: PathBuf) -> PathBuf {
+    let manifest_str = std::fs::read_to_string(&manifest_path)
+        .unwrap_or_else(|e| panic!("Could not open {}: {e}", &manifest_path.display()));
     let manifest_data: toml::Value =
         toml::de::from_str(&manifest_str).expect("Could not parse Cargo manifest as TOML");
 
     // Find the romfs setting and compute the path
-    manifest_data
-        .as_table()
-        .and_then(|table| table.get("package"))
-        .and_then(toml::Value::as_table)
-        .and_then(|table| table.get("metadata"))
-        .and_then(toml::Value::as_table)
-        .and_then(|table| table.get("cargo-3ds"))
-        .and_then(toml::Value::as_table)
-        .and_then(|table| table.get("icon"))
-        .and_then(toml::Value::as_str)
-        .unwrap_or_else(|| icon)
-        .to_string()
+    manifest_path.pop();
+    manifest_path.push(
+        manifest_data
+            .as_table()
+            .and_then(|table| table.get("package"))
+            .and_then(toml::Value::as_table)
+            .and_then(|table| table.get("metadata"))
+            .and_then(toml::Value::as_table)
+            .and_then(|table| table.get("cargo-3ds"))
+            .and_then(toml::Value::as_table)
+            .and_then(|table| table.get("icon"))
+            .and_then(toml::Value::as_str)
+            .unwrap_or_else(|| icon)
+            .to_string(),
+    );
+
+    manifest_path
 }
 
 #[derive(Default)]
