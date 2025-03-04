@@ -281,7 +281,7 @@ pub(crate) fn get_artifact_config(package: Package, artifact: Artifact) -> CTRCo
         .unwrap_or_default();
 
     CTRConfig {
-        name,
+        name: config.name.or(Some(name)),
         authors: config.authors.or(Some(package.authors)),
         description: config.description.or(package.description),
         manifest_dir: package.manifest_path.parent().unwrap().into(),
@@ -375,8 +375,7 @@ pub struct CTRConfig {
     // Remaining fields come from cargo metadata / build artifact output and
     // cannot be customized by users in `package.metadata.cargo-3ds`. I suppose
     // in theory we could allow name to be customizable if we wanted...
-    #[serde(skip)]
-    name: String,
+    name: Option<String>,
     #[serde(skip)]
     target_path: Utf8PathBuf,
     #[serde(skip)]
@@ -407,6 +406,11 @@ impl CTRConfig {
     /// Builds the smdh using `smdhtool`.
     /// This will fail if `smdhtool` is not within the running directory or in a directory found in $PATH
     pub(crate) fn build_smdh(&self, verbose: bool) {
+        let name = self
+            .name
+            .as_deref()
+            .unwrap_or(Self::DEFAULT_AUTHOR);
+
         let description = self
             .description
             .as_deref()
@@ -426,7 +430,7 @@ impl CTRConfig {
         let mut command = Command::new("smdhtool");
         command
             .arg("--create")
-            .arg(&self.name)
+            .arg(name)
             .arg(description)
             .arg(publisher)
             .arg(icon_path)
